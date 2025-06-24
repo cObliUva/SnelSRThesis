@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, 'LOTlib3')
 from LOTlib3.Miscellaneous import q, random
 from LOTlib3.Grammar import Grammar
 from LOTlib3.DataAndObjects import FunctionData, Obj
@@ -10,7 +12,6 @@ from LOTlib3.TopN import TopN
 from LOTlib3.Samplers.MetropolisHastings import MetropolisHastingsSampler
 from joblib import Parallel, delayed
 import multiprocessing
-import sys
 from math import log
 import pandas as pd
 
@@ -126,6 +127,8 @@ def dfToObj(dat):
 
 def LoTMod(tdata, top, h0, samp):
 
+    print("Processing participant: ", samp)
+
     # get the sequences and raw predictions for the current participant
     p_data = tdata.loc[tdata['participant_id'] == samp, ['sequence', 'prediction_raw']]
 
@@ -133,7 +136,7 @@ def LoTMod(tdata, top, h0, samp):
     data = p_data.apply(dfToObj, axis = 1)
             
     # generate the top ten best strategies
-    for h in MetropolisHastingsSampler(h0, data, steps=10000):
+    for h in MetropolisHastingsSampler(h0, data, steps=500000):
         top << h
 
     # intialize lists, to extract topN hypothesis data from
@@ -216,7 +219,7 @@ if __name__ == '__main__':
     experiment = sys.argv[1]
 
     # Load in the whole Excel file
-    all_data = pd.ExcelFile("../Data/PredictingOutcomes_ParticipantPredictions.xlsx")
+    all_data = pd.ExcelFile("/gpfs/home6/cfermin/SnelLoTThesis/Data/PredictingOutcomes_ParticipantPredictions.xlsx")
 
     # extract the worksheet of study 1B, and ensure the type of the sequence and prediction is a string
     data = pd.read_excel(all_data, 'Study ' + experiment, dtype={"sequence": str, "prediction_raw": str})
@@ -224,15 +227,12 @@ if __name__ == '__main__':
     # creat the hypothesis and initilize the topN results storage
     tn = TopN(N=10)
     h0 = MyHypothesis()
-
-    # get the number of
-    n_jobs = multiprocessing.cpu_count()  
-
+    
     # get all the participants
-    participants = pd.unique(data['participant_id'])[:10]
+    participants = pd.unique(data['participant_id'])
 
     # run the LoT model in parralel
-    results = Parallel(n_jobs=n_jobs, backend='multiprocessing')(
+    results = Parallel(n_jobs=64, backend='multiprocessing')(
         delayed(LoTMod)(data, tn, h0, p) for p in participants
     )
 
@@ -240,5 +240,5 @@ if __name__ == '__main__':
     LoTData = pd.concat(results, ignore_index=True)
 
     # save the data in csv
-    LoTData.to_csv("../Data/LoT" + experiment + ".csv", index=False)
+    LoTData.to_csv("/gpfs/home6/cfermin/SnelLoTThesis/Data/LoT" + experiment + ".csv", index=False)
 
